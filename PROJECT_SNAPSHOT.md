@@ -1,6 +1,6 @@
 Project Snapshot
 
-Generated on 09/26/2025 16:31:49
+Generated on 09/26/2025 16:32:52
 
 ## ./PADMA.sln
 `$extension
@@ -136,192 +136,6 @@ namespace PADMA
 
 ` 
 
-## ./PADMA/CalendarViewModel.cs
-`$extension
-using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Linq;
-
-namespace PADMA
-{
-    public class CalendarViewModel : INotifyPropertyChanged
-    {
-        public ObservableCollection<DayItem> Days { get; } = new();
-
-        private int _year;
-        public int Year
-        {
-            get => _year;
-            private set { if (_year != value) { _year = value; OnPropertyChanged(nameof(Year)); } }
-        }
-
-        private int _month;
-        public int Month
-        {
-            get => _month;
-            private set { if (_month != value) { _month = value; OnPropertyChanged(nameof(Month)); } }
-        }
-
-        private DayItem _selectedDay;
-        public DayItem SelectedDay
-        {
-            get => _selectedDay;
-            set
-            {
-                if (_selectedDay != value)
-                {
-                    if (_selectedDay != null) _selectedDay.IsSelected = false;
-                    _selectedDay = value;
-                    if (_selectedDay != null) _selectedDay.IsSelected = true;
-                    OnPropertyChanged(nameof(SelectedDay));
-                }
-            }
-        }
-
-        public CalendarViewModel()
-        {
-            var today = DateTime.Today;
-            Year = today.Year;
-            Month = today.Month;
-            GenerateDays(Year, Month);
-            // автоселект сегодня
-            SelectedDay = Days.FirstOrDefault(d => d.IsCurrentMonth && d.DayNumber == today.Day)
-                       ?? Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
-        }
-
-        public void RefreshCalendar()
-        {
-            // сохраняем выбранный номер дня, чтобы не терять выбор при смене первого дня недели
-            int? selectedNumber = SelectedDay?.DayNumber;
-            GenerateDays(Year, Month);
-            if (selectedNumber.HasValue)
-                SelectedDay = Days.FirstOrDefault(d => d.IsCurrentMonth && d.DayNumber == selectedNumber.Value)
-                           ?? Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
-        }
-
-        private void GenerateDays(int year, int month)
-        {
-            Days.Clear();
-
-            DateTime firstDayOfMonth = new DateTime(year, month, 1);
-            int daysInMonth = DateTime.DaysInMonth(year, month);
-            int startDayOfWeek = (int)firstDayOfMonth.DayOfWeek;
-
-            if (AppSettings.FirstDayOfWeek == FirstDayOfWeek.Monday)
-                startDayOfWeek = startDayOfWeek == 0 ? 6 : startDayOfWeek - 1;
-
-            // предыдущий месяц
-            DateTime prevMonth = firstDayOfMonth.AddMonths(-1);
-            int daysInPrevMonth = DateTime.DaysInMonth(prevMonth.Year, prevMonth.Month);
-
-            for (int i = startDayOfWeek - 1; i >= 0; i--)
-                Days.Add(new DayItem { DayNumber = daysInPrevMonth - i, IsCurrentMonth = false, IsToday = false });
-
-            // текущий месяц
-            var today = DateTime.Today;
-            for (int d = 1; d <= daysInMonth; d++)
-            {
-                bool isToday = (year == today.Year && month == today.Month && d == today.Day);
-                Days.Add(new DayItem { DayNumber = d, IsCurrentMonth = true, IsToday = isToday });
-            }
-
-            // следующий месяц
-            int nextDay = 1;
-            while (Days.Count < 42)
-                Days.Add(new DayItem { DayNumber = nextDay++, IsCurrentMonth = false, IsToday = false });
-        }
-
-        public void MoveMonth(int offset)
-        {
-            var newDate = new DateTime(Year, Month, 1).AddMonths(offset);
-            Year = newDate.Year;
-            Month = newDate.Month;
-
-            GenerateDays(Year, Month);
-
-            // логика выбора: если это текущий месяц — выбираем сегодня, иначе 1 число
-            var today = DateTime.Today;
-            if (Year == today.Year && Month == today.Month)
-                SelectedDay = Days.FirstOrDefault(d => d.IsCurrentMonth && d.DayNumber == today.Day)
-                           ?? Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
-            else
-                SelectedDay = Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged(string name) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-    }
-}
-
-` 
-
-## ./PADMA/ConfigPage.xaml
-`$extension
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="PADMA.ConfigurationPage"
-             Title="Конфигурация">
-
-    <StackLayout Padding="20" Spacing="20">
-
-        <Label Text="Выберите первый день недели:" FontSize="16" />
-
-        <RadioButton x:Name="MondayRadio" Content="Понедельник" GroupName="FirstDayGroup" CheckedChanged="OnFirstDayCheckedChanged"/>
-        <RadioButton x:Name="SundayRadio" Content="Воскресенье" GroupName="FirstDayGroup" CheckedChanged="OnFirstDayCheckedChanged"/>
-
-        <!-- Кнопка закрытия страницы -->
-        <Button Text="Закрыть" VerticalOptions="End" HorizontalOptions="Center" Clicked="OnCloseClicked"/>
-    </StackLayout>
-</ContentPage>
-
-
-` 
-
-## ./PADMA/ConfigPage.xaml.cs
-`$extension
-using Microsoft.Maui.Controls;
-
-namespace PADMA
-{
-    public partial class ConfigurationPage : ContentPage
-    {
-        public ConfigurationPage()
-        {
-            InitializeComponent();
-
-            // ������������� ������� �����
-            if (AppSettings.FirstDayOfWeek == FirstDayOfWeek.Monday)
-                MondayRadio.IsChecked = true;
-            else
-                SundayRadio.IsChecked = true;
-        }
-
-        private void OnFirstDayCheckedChanged(object sender, CheckedChangedEventArgs e)
-        {
-            if (e.Value)
-            {
-                var rb = sender as RadioButton;
-                if (rb == MondayRadio)
-                    AppSettings.FirstDayOfWeek = FirstDayOfWeek.Monday;
-                else if (rb == SundayRadio)
-                    AppSettings.FirstDayOfWeek = FirstDayOfWeek.Sunday;
-            }
-        }
-
-        private async void OnCloseClicked(object sender, EventArgs e)
-        {
-            // �������� ����, ��� ��������, ��� ��������� ����������
-            MessagingCenter.Send(this, "SettingsChanged");
-
-            // ���������� ������� � MainPage, ������� ����
-            await Shell.Current.GoToAsync("///MainPageRoute");
-        }
-    }
-}
-` 
-
 ## ./PADMA/Converters/BoolToColorConverter.cs
 `$extension
 using System;
@@ -446,7 +260,162 @@ namespace PADMA.Converters
 
 ` 
 
-## ./PADMA/DayItem.cs
+## ./PADMA/Enums/FirstDayOfWeek.cs
+`$extension
+public enum FirstDayOfWeek
+{
+    Sunday,
+    Monday
+}
+` 
+
+## ./PADMA/MauiProgram.cs
+`$extension
+namespace PADMA;
+
+public static class MauiProgram
+{
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
+        builder
+            .UseMauiApp<App>()
+            .ConfigureFonts(fonts =>
+            {
+                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+            });
+
+        // больше ничего регистрировать не нужно
+
+        return builder.Build();
+    }
+}
+
+` 
+
+## ./PADMA/Models/CalendarViewModel.cs
+`$extension
+using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+
+namespace PADMA
+{
+    public class CalendarViewModel : INotifyPropertyChanged
+    {
+        public ObservableCollection<DayItem> Days { get; } = new();
+
+        private int _year;
+        public int Year
+        {
+            get => _year;
+            private set { if (_year != value) { _year = value; OnPropertyChanged(nameof(Year)); } }
+        }
+
+        private int _month;
+        public int Month
+        {
+            get => _month;
+            private set { if (_month != value) { _month = value; OnPropertyChanged(nameof(Month)); } }
+        }
+
+        private DayItem _selectedDay;
+        public DayItem SelectedDay
+        {
+            get => _selectedDay;
+            set
+            {
+                if (_selectedDay != value)
+                {
+                    if (_selectedDay != null) _selectedDay.IsSelected = false;
+                    _selectedDay = value;
+                    if (_selectedDay != null) _selectedDay.IsSelected = true;
+                    OnPropertyChanged(nameof(SelectedDay));
+                }
+            }
+        }
+
+        public CalendarViewModel()
+        {
+            var today = DateTime.Today;
+            Year = today.Year;
+            Month = today.Month;
+            GenerateDays(Year, Month);
+            // автоселект сегодня
+            SelectedDay = Days.FirstOrDefault(d => d.IsCurrentMonth && d.DayNumber == today.Day)
+                       ?? Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
+        }
+
+        public void RefreshCalendar()
+        {
+            // сохраняем выбранный номер дня, чтобы не терять выбор при смене первого дня недели
+            int? selectedNumber = SelectedDay?.DayNumber;
+            GenerateDays(Year, Month);
+            if (selectedNumber.HasValue)
+                SelectedDay = Days.FirstOrDefault(d => d.IsCurrentMonth && d.DayNumber == selectedNumber.Value)
+                           ?? Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
+        }
+
+        private void GenerateDays(int year, int month)
+        {
+            Days.Clear();
+
+            DateTime firstDayOfMonth = new DateTime(year, month, 1);
+            int daysInMonth = DateTime.DaysInMonth(year, month);
+            int startDayOfWeek = (int)firstDayOfMonth.DayOfWeek;
+
+            if (AppSettings.FirstDayOfWeek == FirstDayOfWeek.Monday)
+                startDayOfWeek = startDayOfWeek == 0 ? 6 : startDayOfWeek - 1;
+
+            // предыдущий месяц
+            DateTime prevMonth = firstDayOfMonth.AddMonths(-1);
+            int daysInPrevMonth = DateTime.DaysInMonth(prevMonth.Year, prevMonth.Month);
+
+            for (int i = startDayOfWeek - 1; i >= 0; i--)
+                Days.Add(new DayItem { DayNumber = daysInPrevMonth - i, IsCurrentMonth = false, IsToday = false });
+
+            // текущий месяц
+            var today = DateTime.Today;
+            for (int d = 1; d <= daysInMonth; d++)
+            {
+                bool isToday = (year == today.Year && month == today.Month && d == today.Day);
+                Days.Add(new DayItem { DayNumber = d, IsCurrentMonth = true, IsToday = isToday });
+            }
+
+            // следующий месяц
+            int nextDay = 1;
+            while (Days.Count < 42)
+                Days.Add(new DayItem { DayNumber = nextDay++, IsCurrentMonth = false, IsToday = false });
+        }
+
+        public void MoveMonth(int offset)
+        {
+            var newDate = new DateTime(Year, Month, 1).AddMonths(offset);
+            Year = newDate.Year;
+            Month = newDate.Month;
+
+            GenerateDays(Year, Month);
+
+            // логика выбора: если это текущий месяц — выбираем сегодня, иначе 1 число
+            var today = DateTime.Today;
+            if (Year == today.Year && Month == today.Month)
+                SelectedDay = Days.FirstOrDefault(d => d.IsCurrentMonth && d.DayNumber == today.Day)
+                           ?? Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
+            else
+                SelectedDay = Days.First(d => d.IsCurrentMonth && d.DayNumber == 1);
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void OnPropertyChanged(string name) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
+
+` 
+
+## ./PADMA/Models/DayItem.cs
 `$extension
 using System.ComponentModel;
 
@@ -478,16 +447,154 @@ namespace PADMA
 
 ` 
 
-## ./PADMA/Enums/FirstDayOfWeek.cs
+## ./PADMA/PADMA.csproj
 `$extension
-public enum FirstDayOfWeek
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">
+      $(TargetFrameworks);net8.0-windows10.0.19041.0
+    </TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PADMA</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- App info -->
+    <ApplicationTitle>PADMA</ApplicationTitle>
+    <ApplicationId>com.companyname.padma</ApplicationId>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+
+    <!-- Windows -->
+    <WindowsPackageType>None</WindowsPackageType>
+
+    <!-- Supported Platforms -->
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- App Icon -->
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+
+    <!-- Splash Screen -->
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+
+    <!-- Images -->
+    <MauiImage Include="Resources\Images\*" />
+    <MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+
+    <!-- Fonts -->
+    <MauiFont Include="Resources\Fonts\*" />
+
+    <!-- Raw Assets -->
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MAUI 8 -->
+    <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.60" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.60" />
+
+    <!-- SQLite -->
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+
+    <!-- Logging -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Встраиваемая база -->
+    <MauiAsset Include="Resources\Raw\PADMADB.db3" LogicalName="PADMADB.db3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MauiXaml Update="Pages\ConfigPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+    <MauiXaml Update="Pages\ExitPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
+  </ItemGroup>
+
+</Project>
+
+` 
+
+## ./PADMA/Pages/ConfigPage.xaml
+`$extension
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PADMA.ConfigurationPage"
+             Title="Конфигурация">
+
+    <StackLayout Padding="20" Spacing="20">
+
+        <Label Text="Выберите первый день недели:" FontSize="16" />
+
+        <RadioButton x:Name="MondayRadio" Content="Понедельник" GroupName="FirstDayGroup" CheckedChanged="OnFirstDayCheckedChanged"/>
+        <RadioButton x:Name="SundayRadio" Content="Воскресенье" GroupName="FirstDayGroup" CheckedChanged="OnFirstDayCheckedChanged"/>
+
+        <!-- Кнопка закрытия страницы -->
+        <Button Text="Закрыть" VerticalOptions="End" HorizontalOptions="Center" Clicked="OnCloseClicked"/>
+    </StackLayout>
+</ContentPage>
+
+
+` 
+
+## ./PADMA/Pages/ConfigPage.xaml.cs
+`$extension
+using Microsoft.Maui.Controls;
+
+namespace PADMA
 {
-    Sunday,
-    Monday
+    public partial class ConfigurationPage : ContentPage
+    {
+        public ConfigurationPage()
+        {
+            InitializeComponent();
+
+            // ������������� ������� �����
+            if (AppSettings.FirstDayOfWeek == FirstDayOfWeek.Monday)
+                MondayRadio.IsChecked = true;
+            else
+                SundayRadio.IsChecked = true;
+        }
+
+        private void OnFirstDayCheckedChanged(object sender, CheckedChangedEventArgs e)
+        {
+            if (e.Value)
+            {
+                var rb = sender as RadioButton;
+                if (rb == MondayRadio)
+                    AppSettings.FirstDayOfWeek = FirstDayOfWeek.Monday;
+                else if (rb == SundayRadio)
+                    AppSettings.FirstDayOfWeek = FirstDayOfWeek.Sunday;
+            }
+        }
+
+        private async void OnCloseClicked(object sender, EventArgs e)
+        {
+            // �������� ����, ��� ��������, ��� ��������� ����������
+            MessagingCenter.Send(this, "SettingsChanged");
+
+            // ���������� ������� � MainPage, ������� ����
+            await Shell.Current.GoToAsync("///MainPageRoute");
+        }
+    }
 }
 ` 
 
-## ./PADMA/ExitPage.xaml
+## ./PADMA/Pages/ExitPage.xaml
 `$extension
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -503,7 +610,7 @@ public enum FirstDayOfWeek
 </ContentPage>
 ` 
 
-## ./PADMA/ExitPage.xaml.cs
+## ./PADMA/Pages/ExitPage.xaml.cs
 `$extension
 namespace PADMA;
 
@@ -517,7 +624,7 @@ public partial class ExitPage : ContentPage
 }
 ` 
 
-## ./PADMA/MainPage.xaml
+## ./PADMA/Pages/MainPage.xaml
 `$extension
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -531,7 +638,6 @@ public partial class ExitPage : ContentPage
         <CollectionView x:Name="CalendarCollection"
                         Grid.Row="0"
                         ItemsSource="{Binding Days}"
-                        ItemsLayout="VerticalGrid,7"
                         SelectionMode="Single"
                         SelectedItem="{Binding SelectedDay, Mode=TwoWay}"
                         HorizontalOptions="Fill"
@@ -637,20 +743,26 @@ public partial class ExitPage : ContentPage
 
 ` 
 
-## ./PADMA/MainPage.xaml.cs
+## ./PADMA/Pages/MainPage.xaml.cs
 `$extension
 using Microsoft.Maui.Controls;
 using System;
+using PADMA;
 
 namespace PADMA
 {
     public partial class MainPage : ContentPage
     {
         private readonly CalendarViewModel viewModel;
+        private readonly DatabaseService _db;
 
         public MainPage()
         {
             InitializeComponent();
+
+            // создаём сервис базы прямо здесь
+            _db = new DatabaseService();
+
             viewModel = new CalendarViewModel();
             BindingContext = viewModel;
 
@@ -663,6 +775,13 @@ namespace PADMA
                 viewModel.RefreshCalendar();
                 UpdateTitle();
             });
+
+            // тестовый вывод языков из базы
+            var langs = _db.GetLanguages();
+            foreach (var lang in langs)
+            {
+                Console.WriteLine($"Language: {lang.LanguageCode}, Culture: {lang.CultureCode}");
+            }
         }
 
         private void UpdateTitle()
@@ -688,117 +807,6 @@ namespace PADMA
         }
     }
 }
-
-` 
-
-## ./PADMA/MauiProgram.cs
-`$extension
-using Microsoft.Extensions.Logging;
-
-namespace PADMA
-{
-    public static class MauiProgram
-    {
-        public static MauiApp CreateMauiApp()
-        {
-            var builder = MauiApp.CreateBuilder();
-            builder
-                .UseMauiApp<App>()
-                .ConfigureFonts(fonts =>
-                {
-                    fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-                    fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-                });
-
-#if DEBUG
-    		builder.Logging.AddDebug();
-#endif
-
-            return builder.Build();
-        }
-    }
-}
-
-` 
-
-## ./PADMA/PADMA.csproj
-`$extension
-<Project Sdk="Microsoft.NET.Sdk">
-
-	<PropertyGroup>
-		<TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0</TargetFrameworks>
-		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net9.0-tizen</TargetFrameworks> -->
-
-		<!-- Note for MacCatalyst:
-		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
-		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
-		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
-		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
-		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
-
-		<OutputType>Exe</OutputType>
-		<RootNamespace>PADMA</RootNamespace>
-		<UseMaui>true</UseMaui>
-		<SingleProject>true</SingleProject>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-
-		<!-- Display name -->
-		<ApplicationTitle>PADMA</ApplicationTitle>
-
-		<!-- App Identifier -->
-		<ApplicationId>com.companyname.padma</ApplicationId>
-
-		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
-
-		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
-		<WindowsPackageType>None</WindowsPackageType>
-
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
-
-		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
-
-		<!-- Images -->
-		<MauiImage Include="Resources\Images\*" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
-
-		<!-- Custom Fonts -->
-		<MauiFont Include="Resources\Fonts\*" />
-
-		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
-		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.60" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.4" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <MauiXaml Update="ConfigPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="ExitPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	</ItemGroup>
-
-</Project>
 
 ` 
 
@@ -9403,6 +9411,48 @@ namespace Fonts
     </Style>
 
 </ResourceDictionary>
+
+` 
+
+## ./PADMA/Services/DatabaseService.cs
+`$extension
+using SQLite;
+
+namespace PADMA
+{
+    public class DatabaseService
+    {
+        private readonly SQLiteConnection _connection;
+
+        public DatabaseService()
+        {
+            string dbPath = Path.Combine(FileSystem.AppDataDirectory, "PADMADB.db3");
+
+            // Копируем встроенную БД в рабочую папку, если её ещё нет
+            if (!File.Exists(dbPath))
+            {
+                using var stream = FileSystem.OpenAppPackageFileAsync("PADMADB.db3").Result;
+                using var fileStream = File.Create(dbPath);
+                stream.CopyTo(fileStream);
+            }
+
+            _connection = new SQLiteConnection(dbPath);
+        }
+
+        public List<Language> GetLanguages()
+        {
+            return _connection.Table<Language>().ToList();
+        }
+    }
+
+    public class Language
+    {
+        [PrimaryKey, AutoIncrement]
+        public int Id { get; set; }
+        public string LanguageCode { get; set; }
+        public string CultureCode { get; set; }
+    }
+}
 
 ` 
 
